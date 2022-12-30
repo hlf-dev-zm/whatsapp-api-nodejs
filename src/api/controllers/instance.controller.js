@@ -126,7 +126,7 @@ exports.list = async (req, res) => {
         })
     } else {
         let instance = []
-        const db = mongoClient.db('whatsapp-api')
+        const db = mongoClient.db('whatsapp-session')
         const result = await db.listCollections().toArray()
         result.forEach((collection) => {
             instance.push(collection.name)
