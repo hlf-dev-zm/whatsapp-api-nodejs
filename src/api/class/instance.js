@@ -145,6 +145,7 @@ class WhatsAppInstance {
                         'connection',
                         {
                             connection: connection,
+                            id: this.socketConfig.auth.creds.me.id,
                         },
                         this.key
                     )
