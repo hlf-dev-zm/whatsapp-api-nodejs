@@ -4,15 +4,24 @@ const logger = require('pino')()
 const config = require('../../config/config')
 
 class Session {
-    async restoreSessions() {
+    async restoreSessions(sessions = []) {
         let restoredSessions = new Array()
-        let allCollections = []
+        let allCollections = sessions
         try {
             const db = mongoClient.db('whatsapp-session')
             const result = await db.listCollections().toArray()
-            result.forEach((collection) => {
-                allCollections.push(collection.name)
-            })
+            if (allCollections.length == 0) {
+                result.forEach((collection) => {
+                    allCollections.push(collection.name)
+                })
+            } else {
+                allCollections = allCollections.filter((collection_name) => {
+                    return (
+                        result.filter((c) => c.name === collection_name)
+                            .length > 0
+                    )
+                })
+            }
 
             allCollections.map((key) => {
                 const query = {}

@@ -72,8 +72,14 @@ exports.info = async (req, res) => {
 
 exports.restore = async (req, res, next) => {
     try {
+        let { instances } = req.body
         const session = new Session()
-        let restoredSessions = await session.restoreSessions()
+        let restoredSessions = []
+        if (Array.isArray(instances)) {
+            restoredSessions = await session.restoreSessions(instances)
+        } else {
+            restoredSessions = await session.restoreSessions()
+        }
         return res.json({
             error: false,
             message: 'All instances restored',
