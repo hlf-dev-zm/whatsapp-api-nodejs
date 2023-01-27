@@ -24,7 +24,6 @@ class WhatsAppInstance {
         logger: pino({
             level: config.log.level,
         }),
-        generateHighQualityLinkPreview: true,
     }
     key = ''
     authState
