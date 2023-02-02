@@ -447,11 +447,16 @@ class WhatsAppInstance {
         return false
     }
 
-    async sendTextMessage(to, message) {
+    async sendTextMessage(to, message, replyTo) {
+        let options = {}
+        if (replyTo && replyTo.message) {
+            options = { quoted: replyTo }
+        }
         await this.verifyId(this.getWhatsAppId(to))
         const data = await this.instance.sock?.sendMessage(
             this.getWhatsAppId(to),
-            { text: message }
+            { text: message },
+            options
         )
         return data
     }
