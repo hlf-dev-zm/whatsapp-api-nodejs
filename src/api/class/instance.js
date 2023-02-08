@@ -37,6 +37,7 @@ class WhatsAppInstance {
         messages: [],
         qrRetry: 0,
         customWebhook: '',
+        sock: null,
     }
 
     axiosInstance = axios.create({
@@ -420,9 +421,23 @@ class WhatsAppInstance {
 
     async deleteInstance(key) {
         try {
+            this.closeSocket(this.instance?.sock)
             await Chat.findOneAndDelete({ key: key })
         } catch (e) {
             logger.error('Error updating document failed')
+        }
+    }
+
+    closeSocket(sock) {
+        if (sock) {
+            // Close WebSocket connection
+            sock.ws.close()
+
+            // Remove all events
+            sock.ev.removeAllListeners()
+
+            // Delete variable and set null
+            sock = null
         }
     }
 
