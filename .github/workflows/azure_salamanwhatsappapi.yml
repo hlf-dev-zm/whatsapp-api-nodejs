@@ -23,8 +23,7 @@ jobs:
 
       - name: npm install, build, and test
         run: |
-          chown -R root:root . 
-          yarn install
+          yarn
           yarn run test --if-present
 
       - name: Upload artifact for deployment job
