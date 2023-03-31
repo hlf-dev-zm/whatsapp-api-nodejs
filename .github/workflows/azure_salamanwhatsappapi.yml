@@ -23,6 +23,7 @@ jobs:
 
       - name: npm install, build, and test
         run: |
+          yarn config set unsafe-perm true
           yarn install
           yarn run test --if-present
 
