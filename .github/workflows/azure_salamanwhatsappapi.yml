@@ -23,6 +23,7 @@ jobs:
 
       - name: npm install, build, and test
         run: |
+          unset NPM_CONFIG_USER
           yarn
 
       - name: Upload artifact for deployment job
