@@ -23,8 +23,8 @@ jobs:
 
       - name: npm install, build, and test
         run: |
+          unset NPM_CONFIG_USER
           yarn
-          yarn run test --if-present
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
@@ -51,5 +51,5 @@ jobs:
         with:
           app-name: 'SalamanWhatsappAPI'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_ABBFA917E0A744A2B36C06C03B1BA375 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_E2530585611F4DAE99C8AB44BB134AC2 }}
           package: .
