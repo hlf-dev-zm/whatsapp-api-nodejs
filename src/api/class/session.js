@@ -29,36 +29,33 @@ class Session {
                     console.log('Found the instance ', key)
                     const query = {}
                     console.log(await db.collection(key).find(query).toArray())
-                    db.collection(key)
-                        .find(query)
-                        .toArray(async (err, result) => {
-                            if (err) {
-                                console.log('error inside it ', err)
-                                throw err
-                            }
-                            console.log('no error')
-                            const webhook = !config.webhookEnabled
-                                ? undefined
-                                : config.webhookEnabled
-                            const webhookUrl = !config.webhookUrl
-                                ? undefined
-                                : config.webhookUrl
-                            const instance = new WhatsAppInstance(
-                                key,
-                                webhook,
-                                webhookUrl
-                            )
-                            console.log('Before init ')
-                            await instance.init()
-                            console.log('Assigning instance ')
-                            WhatsAppInstances[key] = instance
-                            console.log(
-                                'current whatsapp instance ',
-                                WhatsAppInstances
-                            )
-                        })
+                    let docs = await db.collection(key).find(query).toArray()
+                    if (docs.length > 0) {
+                        console.log('no error')
+                        const webhook = !config.webhookEnabled
+                            ? undefined
+                            : config.webhookEnabled
+                        const webhookUrl = !config.webhookUrl
+                            ? undefined
+                            : config.webhookUrl
+                        const instance = new WhatsAppInstance(
+                            key,
+                            webhook,
+                            webhookUrl
+                        )
+                        console.log('Before init ')
+                        await instance.init()
+                        console.log('Assigning instance ')
+                        WhatsAppInstances[key] = instance
+                        console.log(
+                            'current whatsapp instance ',
+                            WhatsAppInstances
+                        )
+                        restoredSessions.push(key)
+                    }
+                } else {
+                    restoredSessions.push(key)
                 }
-                restoredSessions.push(key)
             })
         } catch (e) {
             logger.error('Error restoring sessions')
