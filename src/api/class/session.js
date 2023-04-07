@@ -23,12 +23,12 @@ class Session {
                 })
             }
 
-            allCollections.map((key) => {
+            allCollections.map(async (key) => {
                 console.log('Whatsapp Instances ', WhatsAppInstances)
                 if (!WhatsAppInstances[key]) {
                     console.log('Found the instance ', key)
                     const query = {}
-                    console.log(db.collection(key).find(query).toArray())
+                    console.log(await db.collection(key).find(query).toArray())
                     db.collection(key)
                         .find(query)
                         .toArray(async (err, result) => {
