@@ -10,7 +10,6 @@ class Session {
         try {
             const db = mongoClient.db('whatsapp-session')
             const result = await db.listCollections().toArray()
-            console.log('collections list', result)
             if (allCollections.length == 0) {
                 result.forEach((collection) => {
                     allCollections.push(collection.name)
@@ -25,7 +24,9 @@ class Session {
             }
 
             allCollections.map((key) => {
+                console.log('Whatsapp Instances ', WhatsAppInstances)
                 if (!WhatsAppInstances[key]) {
+                    console.log('Found the instance ', key)
                     const query = {}
                     db.collection(key)
                         .find(query)
@@ -43,7 +44,12 @@ class Session {
                                 webhookUrl
                             )
                             await instance.init()
+                            console.log('Assigning instance ')
                             WhatsAppInstances[key] = instance
+                            console.log(
+                                'current whatsapp instance ',
+                                WhatsAppInstances
+                            )
                         })
                 }
                 restoredSessions.push(key)
