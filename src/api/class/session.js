@@ -31,7 +31,11 @@ class Session {
                     db.collection(key)
                         .find(query)
                         .toArray(async (err, result) => {
-                            if (err) throw err
+                            if (err) {
+                                console.log('error inside it ', err)
+                                throw err
+                            }
+                            console.log('no error')
                             const webhook = !config.webhookEnabled
                                 ? undefined
                                 : config.webhookEnabled
@@ -43,6 +47,7 @@ class Session {
                                 webhook,
                                 webhookUrl
                             )
+                            console.log('Before init ')
                             await instance.init()
                             console.log('Assigning instance ')
                             WhatsAppInstances[key] = instance
