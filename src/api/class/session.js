@@ -10,6 +10,7 @@ class Session {
         try {
             const db = mongoClient.db('whatsapp-session')
             const result = await db.listCollections().toArray()
+            console.log('collections list', result)
             if (allCollections.length == 0) {
                 result.forEach((collection) => {
                     allCollections.push(collection.name)
@@ -51,6 +52,7 @@ class Session {
             logger.error('Error restoring sessions')
             logger.error(e)
         }
+        console.log('Whatsapp Instances', WhatsAppInstances)
         return restoredSessions
     }
 }

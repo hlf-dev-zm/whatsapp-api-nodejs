@@ -75,8 +75,11 @@ exports.restore = async (req, res, next) => {
         let { instances } = req.body
         const session = new Session()
         let restoredSessions = []
+        console.log('Instances to be restored ', instances)
         if (Array.isArray(instances)) {
             restoredSessions = await session.restoreSessions(instances)
+            console.log('Restored instances ', restoredSessions)
+            console.log('Whatsapp Instances After', WhatsAppInstances)
         } else {
             restoredSessions = await session.restoreSessions()
         }
