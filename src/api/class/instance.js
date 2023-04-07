@@ -446,12 +446,17 @@ class WhatsAppInstance {
             instance_key: key,
             phone_connected: this.instance?.online,
             webhookUrl: this.instance.customWebhook,
-            user: this.instance?.online ? this.instance.sock?.user : {},
+            user: this.instance.sock, // this.instance?.online ? this.instance.sock?.user : {},
         }
     }
 
     getWhatsAppId(id) {
-        if (id.includes('@g.us') || id.includes('@s.whatsapp.net')) return id
+        if (
+            id.includes('@g.us') ||
+            id.includes('@s.whatsapp.net') ||
+            id.includes('@broadcast')
+        )
+            return id
         return id.includes('-') ? `${id}@g.us` : `${id}@s.whatsapp.net`
     }
 
@@ -467,12 +472,14 @@ class WhatsAppInstance {
         if (replyTo && replyTo.message) {
             options = { quoted: replyTo }
         }
-        await this.verifyId(this.getWhatsAppId(to))
+        let whatsapp_id = this.getWhatsAppId(to)
+        await this.verifyId(whatsapp_id)
         const data = await this.instance.sock?.sendMessage(
-            this.getWhatsAppId(to),
+            whatsapp_id,
             { text: message },
             options
         )
+        console.log(data)
         return data
     }
 
