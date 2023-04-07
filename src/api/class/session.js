@@ -28,6 +28,7 @@ class Session {
                 if (!WhatsAppInstances[key]) {
                     console.log('Found the instance ', key)
                     const query = {}
+                    console.log(db.collection(key).find(query).toArray())
                     db.collection(key)
                         .find(query)
                         .toArray(async (err, result) => {
