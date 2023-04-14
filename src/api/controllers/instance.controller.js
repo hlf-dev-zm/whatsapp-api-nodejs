@@ -1,6 +1,4 @@
 const { WhatsAppInstance } = require('../class/instance')
-const fs = require('fs')
-const path = require('path')
 const config = require('../../config/config')
 const { Session } = require('../class/session')
 
@@ -75,11 +73,8 @@ exports.restore = async (req, res, next) => {
         let { instances } = req.body
         const session = new Session()
         let restoredSessions = []
-        console.log('Instances to be restored ', instances)
         if (Array.isArray(instances)) {
             restoredSessions = await session.restoreSessions(instances)
-            console.log('Restored instances ', restoredSessions)
-            console.log('Whatsapp Instances After', WhatsAppInstances)
         } else {
             restoredSessions = await session.restoreSessions()
         }
@@ -102,7 +97,7 @@ exports.logout = async (req, res) => {
     }
     return res.json({
         error: false,
-        message: 'logout successfull',
+        message: 'logout successful',
         errormsg: errormsg ? errormsg : null,
     })
 }
@@ -124,16 +119,6 @@ exports.delete = async (req, res) => {
 
 exports.list = async (req, res) => {
     if (req.query.active) {
-        let instance = Object.keys(WhatsAppInstances).map(async (key) =>
-            WhatsAppInstances[key].getInstanceDetail(key)
-        )
-        let data = await Promise.all(instance)
-        return res.json({
-            error: false,
-            message: 'All active instance',
-            data: data,
-        })
-    } else {
         let instance = []
         const db = mongoClient.db('whatsapp-session')
         const result = await db.listCollections().toArray()
@@ -143,8 +128,19 @@ exports.list = async (req, res) => {
 
         return res.json({
             error: false,
-            message: 'All instance listed',
+            message: 'All active instance',
             data: instance,
         })
     }
+
+    let instance = Object.keys(WhatsAppInstances).map(async (key) =>
+        WhatsAppInstances[key].getInstanceDetail(key)
+    )
+    let data = await Promise.all(instance)
+
+    return res.json({
+        error: false,
+        message: 'All instance listed',
+        data: data,
+    })
 }
