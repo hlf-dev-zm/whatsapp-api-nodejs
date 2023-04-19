@@ -97,7 +97,7 @@ exports.logout = async (req, res) => {
     }
     return res.json({
         error: false,
-        message: 'logout successfull',
+        message: 'logout successful',
         errormsg: errormsg ? errormsg : null,
     })
 }

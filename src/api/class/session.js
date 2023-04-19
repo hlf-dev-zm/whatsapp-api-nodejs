@@ -23,30 +23,26 @@ class Session {
                 })
             }
 
-            allCollections.map((key) => {
+            for (var key of allCollections) {
                 if (!WhatsAppInstances[key]) {
                     const query = {}
-                    db.collection(key)
-                        .find(query)
-                        .toArray(async (err, result) => {
-                            if (err) throw err
-                            const webhook = !config.webhookEnabled
-                                ? undefined
-                                : config.webhookEnabled
-                            const webhookUrl = !config.webhookUrl
-                                ? undefined
-                                : config.webhookUrl
-                            const instance = new WhatsAppInstance(
-                                key,
-                                webhook,
-                                webhookUrl
-                            )
-                            await instance.init()
-                            WhatsAppInstances[key] = instance
-                        })
+                    let docs = await db.collection(key).find(query).toArray()
+                    if (docs.length > 0) {
+                        const webhook = config.webhookEnabled
+                        const webhookUrl = config.webhookUrl
+                        const instance = new WhatsAppInstance(
+                            key,
+                            webhook,
+                            webhookUrl
+                        )
+                        await instance.init()
+                        WhatsAppInstances[key] = instance
+                        restoredSessions.push(key)
+                    }
+                } else {
+                    restoredSessions.push(key)
                 }
-                restoredSessions.push(key)
-            })
+            }
         } catch (e) {
             logger.error('Error restoring sessions')
             logger.error(e)
