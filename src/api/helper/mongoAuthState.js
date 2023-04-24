@@ -8,7 +8,7 @@ const {
 } = require('@adiwajshing/baileys/lib/Utils/generics')
 const { randomBytes } = require('crypto')
 
-const initAuthCreds = () => {
+const initAuthCreds = (webhookUrl) => {
     const identityKey = Curve.generateKeyPair()
     return {
         noiseKey: Curve.generateKeyPair(),
@@ -21,6 +21,9 @@ const initAuthCreds = () => {
         firstUnuploadedPreKeyId: 1,
         accountSettings: {
             unarchiveChats: false,
+        },
+        webhook: {
+            url: webhookUrl,
         },
     }
 }
@@ -57,7 +60,7 @@ const BufferJSON = {
     },
 }
 
-module.exports = useMongoDBAuthState = async (collection) => {
+module.exports = useMongoDBAuthState = async (collection, webhookUrl) => {
     const writeData = (data, id) => {
         return collection.replaceOne(
             { _id: id },
@@ -78,7 +81,7 @@ module.exports = useMongoDBAuthState = async (collection) => {
             await collection.deleteOne({ _id: id })
         } catch (_a) {}
     }
-    const creds = (await readData('creds')) || (0, initAuthCreds)()
+    const creds = (await readData('creds')) || (0, initAuthCreds)(webhookUrl)
     return {
         state: {
             creds,
@@ -90,7 +93,9 @@ module.exports = useMongoDBAuthState = async (collection) => {
                             let value = await readData(`${type}-${id}`)
                             if (type === 'app-state-sync-key') {
                                 value =
-                                    proto.Message.AppStateSyncKeyData.fromObject(data)
+                                    proto.Message.AppStateSyncKeyData.fromObject(
+                                        data
+                                    )
                             }
                             data[id] = value
                         })

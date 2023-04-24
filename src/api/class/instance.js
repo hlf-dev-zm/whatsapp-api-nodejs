@@ -74,7 +74,10 @@ class WhatsAppInstance {
         this.collection = mongoClient
             .db('whatsapp-session')
             .collection(this.key)
-        const { state, saveCreds } = await useMongoDBAuthState(this.collection)
+        const { state, saveCreds } = await useMongoDBAuthState(
+            this.collection,
+            this.instance.customWebhook
+        )
         this.authState = { state: state, saveCreds: saveCreds }
         this.socketConfig.auth = this.authState.state
         this.socketConfig.browser = Object.values(config.browser)

@@ -22,14 +22,16 @@ class Session {
                     )
                 })
             }
-
             for (var key of allCollections) {
                 if (!WhatsAppInstances[key]) {
-                    const query = {}
-                    let docs = await db.collection(key).find(query).toArray()
-                    if (docs.length > 0) {
-                        const webhook = config.webhookEnabled
-                        const webhookUrl = config.webhookUrl
+                    const query = { _id: 'creds' }
+                    let docs = await db.collection(key).find(query)
+
+                    for await (var doc of docs) {
+                        const webhook = doc.webhook.url
+                            ? true
+                            : config.webhookEnabled || false
+                        const webhookUrl = doc.webhook.url || config.webhookUrl
                         const instance = new WhatsAppInstance(
                             key,
                             webhook,
