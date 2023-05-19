@@ -15,4 +15,5 @@ router
 router
     .route('/getuserorgroupbyid')
     .get(keyVerify, loginVerify, controller.getUserOrGroupById)
+router.route('/getchatbyid').get(keyVerify, loginVerify, controller.getChatById)
 module.exports = router

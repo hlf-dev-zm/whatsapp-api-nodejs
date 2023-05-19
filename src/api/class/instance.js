@@ -99,15 +99,22 @@ class WhatsAppInstance {
 
             if (connection === 'close') {
                 // reconnect if not logged out
+                logger.info(lastDisconnect?.error?.output)
                 if (
                     lastDisconnect?.error?.output?.statusCode !==
                     DisconnectReason.loggedOut
                 ) {
-                    await this.init()
+                    if (lastDisconnect?.error?.output?.statusCode != 500) {
+                        await this.init()
+                    }
                 } else {
-                    await this.collection.drop().then((r) => {
+                    await this.collection.drop().then(async (r) => {
+                        await Chat.deleteOne({
+                            key: this.key,
+                        })
                         logger.info('STATE: Droped collection')
                     })
+
                     this.instance.online = false
                 }
 
@@ -1012,6 +1019,21 @@ class WhatsAppInstance {
             return res
         } catch (e) {
             logger.error('Error read message failed')
+        }
+    }
+
+    async forwardMessage(id, msgObj) {
+        try {
+            const res = await this.instance.sock?.sendMessage(
+                this.getWhatsAppId(id),
+                {
+                    forward: msgObj,
+                    // contextInfo: { forwardingScore: 2, isForwarded: true },
+                }
+            )
+            return res
+        } catch (e) {
+            logger.error('Error forward message failed')
         }
     }
 
