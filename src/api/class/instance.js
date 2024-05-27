@@ -24,6 +24,7 @@ class WhatsAppInstance {
         logger: pino({
             level: config.log.level,
         }),
+        version: [2, 2413, 1],
     }
     key = ''
     authState
@@ -71,362 +72,379 @@ class WhatsAppInstance {
     }
 
     async init() {
-        this.collection = mongoClient
-            .db('whatsapp-session')
-            .collection(this.key)
-        const { state, saveCreds } = await useMongoDBAuthState(
-            this.collection,
-            this.instance.customWebhook
-        )
-        this.authState = { state: state, saveCreds: saveCreds }
-        this.socketConfig.auth = this.authState.state
-        this.socketConfig.browser = Object.values(config.browser)
-        this.instance.sock = makeWASocket(this.socketConfig)
-        this.setHandler()
-        return this
+        try {
+            this.collection = mongoClient
+                .db('whatsapp-session')
+                .collection(this.key)
+            const { state, saveCreds } = await useMongoDBAuthState(
+                this.collection,
+                this.instance.customWebhook
+            )
+            this.authState = { state: state, saveCreds: saveCreds }
+            this.socketConfig.auth = this.authState.state
+            this.socketConfig.browser = Object.values(config.browser)
+            this.instance.sock = makeWASocket(this.socketConfig)
+            this.setHandler()
+            return this
+        } catch (error) {
+            console.log(error)
+        }
     }
 
     setHandler() {
-        const sock = this.instance.sock
-        // on credentials update save state
-        sock?.ev.on('creds.update', this.authState.saveCreds)
+        try {
+            const sock = this.instance.sock
+            // on credentials update save state
+            sock?.ev.on('creds.update', this.authState.saveCreds)
 
-        // on socket closed, opened, connecting
-        sock?.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update
+            // on socket closed, opened, connecting
+            sock?.ev.on('connection.update', async (update) => {
+                const { connection, lastDisconnect, qr } = update
 
-            if (connection === 'connecting') return
+                if (connection === 'connecting') return
 
-            if (connection === 'close') {
-                // reconnect if not logged out
-                logger.info(lastDisconnect?.error?.output)
-                if (
-                    lastDisconnect?.error?.output?.statusCode !==
-                    DisconnectReason.loggedOut
-                ) {
-                    if (lastDisconnect?.error?.output?.statusCode != 500) {
-                        await this.init()
-                    }
-                } else {
-                    await this.collection.drop().then(async (r) => {
-                        await Chat.deleteOne({
-                            key: this.key,
+                if (connection === 'close') {
+                    // reconnect if not logged out
+                    logger.info(lastDisconnect?.error?.output)
+                    if (
+                        lastDisconnect?.error?.output?.statusCode !==
+                        DisconnectReason.loggedOut
+                    ) {
+                        if (lastDisconnect?.error?.output?.statusCode != 500) {
+                            await this.init()
+                        }
+                    } else {
+                        await this.collection.drop().then(async (r) => {
+                            await Chat.deleteOne({
+                                key: this.key,
+                            })
+                            logger.info('STATE: Droped collection')
                         })
-                        logger.info('STATE: Droped collection')
+
+                        this.instance.online = false
+                    }
+
+                    if (
+                        [
+                            'all',
+                            'connection',
+                            'connection.update',
+                            'connection:close',
+                        ].some((e) => config.webhookAllowedEvents.includes(e))
+                    )
+                        await this.SendWebhook(
+                            'connection',
+                            {
+                                connection: connection,
+                            },
+                            this.key
+                        )
+                } else if (connection === 'open') {
+                    if (config.mongoose.enabled) {
+                        let alreadyThere = await Chat.findOne({
+                            key: this.key,
+                        }).exec()
+                        if (!alreadyThere) {
+                            const saveChat = new Chat({ key: this.key })
+                            await saveChat.save()
+                        }
+                    }
+                    this.instance.online = true
+                    if (
+                        [
+                            'all',
+                            'connection',
+                            'connection.update',
+                            'connection:open',
+                        ].some((e) => config.webhookAllowedEvents.includes(e))
+                    )
+                        await this.SendWebhook(
+                            'connection',
+                            {
+                                connection: connection,
+                                id: this.socketConfig.auth.creds.me.id,
+                            },
+                            this.key
+                        )
+                }
+
+                if (qr) {
+                    QRCode.toDataURL(qr).then((url) => {
+                        this.instance.qr = url
+                        this.instance.qrRetry++
+                        if (
+                            this.instance.qrRetry >= config.instance.maxRetryQr
+                        ) {
+                            // close WebSocket connection
+                            this.instance.sock.ws.close()
+                            // remove all events
+                            this.instance.sock.ev.removeAllListeners()
+                            this.instance.qr = ' '
+                            logger.info('socket connection terminated')
+                        }
                     })
-
-                    this.instance.online = false
-                }
-
-                if (
-                    [
-                        'all',
-                        'connection',
-                        'connection.update',
-                        'connection:close',
-                    ].some((e) => config.webhookAllowedEvents.includes(e))
-                )
-                    await this.SendWebhook(
-                        'connection',
-                        {
-                            connection: connection,
-                        },
-                        this.key
-                    )
-            } else if (connection === 'open') {
-                if (config.mongoose.enabled) {
-                    let alreadyThere = await Chat.findOne({
-                        key: this.key,
-                    }).exec()
-                    if (!alreadyThere) {
-                        const saveChat = new Chat({ key: this.key })
-                        await saveChat.save()
-                    }
-                }
-                this.instance.online = true
-                if (
-                    [
-                        'all',
-                        'connection',
-                        'connection.update',
-                        'connection:open',
-                    ].some((e) => config.webhookAllowedEvents.includes(e))
-                )
-                    await this.SendWebhook(
-                        'connection',
-                        {
-                            connection: connection,
-                            id: this.socketConfig.auth.creds.me.id,
-                        },
-                        this.key
-                    )
-            }
-
-            if (qr) {
-                QRCode.toDataURL(qr).then((url) => {
-                    this.instance.qr = url
-                    this.instance.qrRetry++
-                    if (this.instance.qrRetry >= config.instance.maxRetryQr) {
-                        // close WebSocket connection
-                        this.instance.sock.ws.close()
-                        // remove all events
-                        this.instance.sock.ev.removeAllListeners()
-                        this.instance.qr = ' '
-                        logger.info('socket connection terminated')
-                    }
-                })
-            }
-        })
-
-        // sending presence
-        sock?.ev.on('presence.update', async (json) => {
-            if (
-                ['all', 'presence', 'presence.update'].some((e) =>
-                    config.webhookAllowedEvents.includes(e)
-                )
-            )
-                await this.SendWebhook('presence', json, this.key)
-        })
-
-        // on receive all chats
-        sock?.ev.on('chats.set', async ({ chats }) => {
-            this.instance.chats = []
-            const recivedChats = chats.map((chat) => {
-                return {
-                    ...chat,
-                    messages: [],
                 }
             })
-            this.instance.chats.push(...recivedChats)
-            await this.updateDb(this.instance.chats)
-            await this.updateDbGroupsParticipants()
-        })
 
-        // on recive new chat
-        sock?.ev.on('chats.upsert', (newChat) => {
-            //console.log('chats.upsert')
-            //console.log(newChat)
-            const chats = newChat.map((chat) => {
-                return {
-                    ...chat,
-                    messages: [],
-                }
-            })
-            this.instance.chats.push(...chats)
-        })
-
-        // on chat change
-        sock?.ev.on('chats.update', (changedChat) => {
-            //console.log('chats.update')
-            //console.log(changedChat)
-            changedChat.map((chat) => {
-                const index = this.instance.chats.findIndex(
-                    (pc) => pc.id === chat.id
-                )
-                const PrevChat = this.instance.chats[index]
-                this.instance.chats[index] = {
-                    ...PrevChat,
-                    ...chat,
-                }
-            })
-        })
-
-        // on chat delete
-        sock?.ev.on('chats.delete', (deletedChats) => {
-            //console.log('chats.delete')
-            //console.log(deletedChats)
-            deletedChats.map((chat) => {
-                const index = this.instance.chats.findIndex(
-                    (c) => c.id === chat
-                )
-                this.instance.chats.splice(index, 1)
-            })
-        })
-
-        // on new mssage
-        sock?.ev.on('messages.upsert', async (m) => {
-            //console.log('messages.upsert')
-            //console.log(m)
-            if (m.type === 'prepend')
-                this.instance.messages.unshift(...m.messages)
-            if (m.type !== 'notify') return
-
-            // https://adiwajshing.github.io/Baileys/#reading-messages
-            if (config.markMessagesRead) {
-                const unreadMessages = m.messages.map((msg) => {
-                    return {
-                        remoteJid: msg.key.remoteJid,
-                        id: msg.key.id,
-                        participant: msg.key?.participant,
-                    }
-                })
-                await sock.readMessages(unreadMessages)
-            }
-
-            this.instance.messages.unshift(...m.messages)
-
-            m.messages.map(async (msg) => {
-                if (!msg.message) return
-
-                const messageType = Object.keys(msg.message)[0]
+            // sending presence
+            sock?.ev.on('presence.update', async (json) => {
                 if (
-                    [
-                        'protocolMessage',
-                        'senderKeyDistributionMessage',
-                    ].includes(messageType)
-                )
-                    return
-
-                const webhookData = {
-                    key: this.key,
-                    ...msg,
-                }
-
-                if (messageType === 'conversation') {
-                    webhookData['text'] = m
-                }
-                if (config.webhookBase64) {
-                    switch (messageType) {
-                        case 'imageMessage':
-                            webhookData['msgContent'] = await downloadMessage(
-                                msg.message.imageMessage,
-                                'image'
-                            )
-                            break
-                        case 'videoMessage':
-                            webhookData['msgContent'] = await downloadMessage(
-                                msg.message.videoMessage,
-                                'video'
-                            )
-                            break
-                        case 'audioMessage':
-                            webhookData['msgContent'] = await downloadMessage(
-                                msg.message.audioMessage,
-                                'audio'
-                            )
-                            break
-                        default:
-                            webhookData['msgContent'] = ''
-                            break
-                    }
-                }
-                if (
-                    ['all', 'messages', 'messages.upsert'].some((e) =>
+                    ['all', 'presence', 'presence.update'].some((e) =>
                         config.webhookAllowedEvents.includes(e)
                     )
                 )
-                    await this.SendWebhook('message', webhookData, this.key)
+                    await this.SendWebhook('presence', json, this.key)
             })
-        })
 
-        sock?.ev.on('messages.update', async (messages) => {
-            //console.log('messages.update')
-            //console.dir(messages);
-        })
-        sock?.ws.on('CB:call', async (data) => {
-            if (data.content) {
-                if (data.content.find((e) => e.tag === 'offer')) {
-                    const content = data.content.find((e) => e.tag === 'offer')
-                    if (
-                        ['all', 'call', 'CB:call', 'call:offer'].some((e) =>
-                            config.webhookAllowedEvents.includes(e)
-                        )
-                    )
-                        await this.SendWebhook(
-                            'call_offer',
-                            {
-                                id: content.attrs['call-id'],
-                                timestamp: parseInt(data.attrs.t),
-                                user: {
-                                    id: data.attrs.from,
-                                    platform: data.attrs.platform,
-                                    platform_version: data.attrs.version,
-                                },
-                            },
-                            this.key
-                        )
-                } else if (data.content.find((e) => e.tag === 'terminate')) {
-                    const content = data.content.find(
-                        (e) => e.tag === 'terminate'
-                    )
+            // on receive all chats
+            sock?.ev.on('chats.set', async ({ chats }) => {
+                this.instance.chats = []
+                const recivedChats = chats.map((chat) => {
+                    return {
+                        ...chat,
+                        messages: [],
+                    }
+                })
+                this.instance.chats.push(...recivedChats)
+                await this.updateDb(this.instance.chats)
+                await this.updateDbGroupsParticipants()
+            })
 
-                    if (
-                        ['all', 'call', 'call:terminate'].some((e) =>
-                            config.webhookAllowedEvents.includes(e)
-                        )
+            // on recive new chat
+            sock?.ev.on('chats.upsert', (newChat) => {
+                //console.log('chats.upsert')
+                //console.log(newChat)
+                const chats = newChat.map((chat) => {
+                    return {
+                        ...chat,
+                        messages: [],
+                    }
+                })
+                this.instance.chats.push(...chats)
+            })
+
+            // on chat change
+            sock?.ev.on('chats.update', (changedChat) => {
+                //console.log('chats.update')
+                //console.log(changedChat)
+                changedChat.map((chat) => {
+                    const index = this.instance.chats.findIndex(
+                        (pc) => pc.id === chat.id
                     )
-                        await this.SendWebhook(
-                            'call_terminate',
-                            {
-                                id: content.attrs['call-id'],
-                                user: {
-                                    id: data.attrs.from,
-                                },
-                                timestamp: parseInt(data.attrs.t),
-                                reason: data.content[0].attrs.reason,
-                            },
-                            this.key
-                        )
+                    const PrevChat = this.instance.chats[index]
+                    this.instance.chats[index] = {
+                        ...PrevChat,
+                        ...chat,
+                    }
+                })
+            })
+
+            // on chat delete
+            sock?.ev.on('chats.delete', (deletedChats) => {
+                //console.log('chats.delete')
+                //console.log(deletedChats)
+                deletedChats.map((chat) => {
+                    const index = this.instance.chats.findIndex(
+                        (c) => c.id === chat
+                    )
+                    this.instance.chats.splice(index, 1)
+                })
+            })
+
+            // on new mssage
+            sock?.ev.on('messages.upsert', async (m) => {
+                //console.log('messages.upsert')
+                //console.log(m)
+                if (m.type === 'prepend')
+                    this.instance.messages.unshift(...m.messages)
+                if (m.type !== 'notify') return
+
+                // https://adiwajshing.github.io/Baileys/#reading-messages
+                if (config.markMessagesRead) {
+                    const unreadMessages = m.messages.map((msg) => {
+                        return {
+                            remoteJid: msg.key.remoteJid,
+                            id: msg.key.id,
+                            participant: msg.key?.participant,
+                        }
+                    })
+                    await sock.readMessages(unreadMessages)
                 }
-            }
-        })
 
-        sock?.ev.on('groups.upsert', async (newChat) => {
-            //console.log('groups.upsert')
-            //console.log(newChat)
-            this.createGroupByApp(newChat)
-            if (
-                ['all', 'groups', 'groups.upsert'].some((e) =>
-                    config.webhookAllowedEvents.includes(e)
-                )
-            )
-                await this.SendWebhook(
-                    'group_created',
-                    {
-                        data: newChat,
-                    },
-                    this.key
-                )
-        })
+                this.instance.messages.unshift(...m.messages)
 
-        sock?.ev.on('groups.update', async (newChat) => {
-            //console.log('groups.update')
-            //console.log(newChat)
-            this.updateGroupSubjectByApp(newChat)
-            if (
-                ['all', 'groups', 'groups.update'].some((e) =>
-                    config.webhookAllowedEvents.includes(e)
-                )
-            )
-                await this.SendWebhook(
-                    'group_updated',
-                    {
-                        data: newChat,
-                    },
-                    this.key
-                )
-        })
+                m.messages.map(async (msg) => {
+                    if (!msg.message) return
 
-        sock?.ev.on('group-participants.update', async (newChat) => {
-            //console.log('group-participants.update')
-            //console.log(newChat)
-            this.updateGroupParticipantsByApp(newChat)
-            if (
-                [
-                    'all',
-                    'groups',
-                    'group_participants',
-                    'group-participants.update',
-                ].some((e) => config.webhookAllowedEvents.includes(e))
-            )
-                await this.SendWebhook(
-                    'group_participants_updated',
-                    {
-                        data: newChat,
-                    },
-                    this.key
+                    const messageType = Object.keys(msg.message)[0]
+                    if (
+                        [
+                            'protocolMessage',
+                            'senderKeyDistributionMessage',
+                        ].includes(messageType)
+                    )
+                        return
+
+                    const webhookData = {
+                        key: this.key,
+                        ...msg,
+                    }
+
+                    if (messageType === 'conversation') {
+                        webhookData['text'] = m
+                    }
+                    if (config.webhookBase64) {
+                        switch (messageType) {
+                            case 'imageMessage':
+                                webhookData['msgContent'] =
+                                    await downloadMessage(
+                                        msg.message.imageMessage,
+                                        'image'
+                                    )
+                                break
+                            case 'videoMessage':
+                                webhookData['msgContent'] =
+                                    await downloadMessage(
+                                        msg.message.videoMessage,
+                                        'video'
+                                    )
+                                break
+                            case 'audioMessage':
+                                webhookData['msgContent'] =
+                                    await downloadMessage(
+                                        msg.message.audioMessage,
+                                        'audio'
+                                    )
+                                break
+                            default:
+                                webhookData['msgContent'] = ''
+                                break
+                        }
+                    }
+                    if (
+                        ['all', 'messages', 'messages.upsert'].some((e) =>
+                            config.webhookAllowedEvents.includes(e)
+                        )
+                    )
+                        await this.SendWebhook('message', webhookData, this.key)
+                })
+            })
+
+            sock?.ev.on('messages.update', async (messages) => {
+                //console.log('messages.update')
+                //console.dir(messages);
+            })
+            sock?.ws.on('CB:call', async (data) => {
+                if (data.content) {
+                    if (data.content.find((e) => e.tag === 'offer')) {
+                        const content = data.content.find(
+                            (e) => e.tag === 'offer'
+                        )
+                        if (
+                            ['all', 'call', 'CB:call', 'call:offer'].some((e) =>
+                                config.webhookAllowedEvents.includes(e)
+                            )
+                        )
+                            await this.SendWebhook(
+                                'call_offer',
+                                {
+                                    id: content.attrs['call-id'],
+                                    timestamp: parseInt(data.attrs.t),
+                                    user: {
+                                        id: data.attrs.from,
+                                        platform: data.attrs.platform,
+                                        platform_version: data.attrs.version,
+                                    },
+                                },
+                                this.key
+                            )
+                    } else if (
+                        data.content.find((e) => e.tag === 'terminate')
+                    ) {
+                        const content = data.content.find(
+                            (e) => e.tag === 'terminate'
+                        )
+
+                        if (
+                            ['all', 'call', 'call:terminate'].some((e) =>
+                                config.webhookAllowedEvents.includes(e)
+                            )
+                        )
+                            await this.SendWebhook(
+                                'call_terminate',
+                                {
+                                    id: content.attrs['call-id'],
+                                    user: {
+                                        id: data.attrs.from,
+                                    },
+                                    timestamp: parseInt(data.attrs.t),
+                                    reason: data.content[0].attrs.reason,
+                                },
+                                this.key
+                            )
+                    }
+                }
+            })
+
+            sock?.ev.on('groups.upsert', async (newChat) => {
+                //console.log('groups.upsert')
+                //console.log(newChat)
+                this.createGroupByApp(newChat)
+                if (
+                    ['all', 'groups', 'groups.upsert'].some((e) =>
+                        config.webhookAllowedEvents.includes(e)
+                    )
                 )
-        })
+                    await this.SendWebhook(
+                        'group_created',
+                        {
+                            data: newChat,
+                        },
+                        this.key
+                    )
+            })
+
+            sock?.ev.on('groups.update', async (newChat) => {
+                //console.log('groups.update')
+                //console.log(newChat)
+                this.updateGroupSubjectByApp(newChat)
+                if (
+                    ['all', 'groups', 'groups.update'].some((e) =>
+                        config.webhookAllowedEvents.includes(e)
+                    )
+                )
+                    await this.SendWebhook(
+                        'group_updated',
+                        {
+                            data: newChat,
+                        },
+                        this.key
+                    )
+            })
+
+            sock?.ev.on('group-participants.update', async (newChat) => {
+                //console.log('group-participants.update')
+                //console.log(newChat)
+                this.updateGroupParticipantsByApp(newChat)
+                if (
+                    [
+                        'all',
+                        'groups',
+                        'group_participants',
+                        'group-participants.update',
+                    ].some((e) => config.webhookAllowedEvents.includes(e))
+                )
+                    await this.SendWebhook(
+                        'group_participants_updated',
+                        {
+                            data: newChat,
+                        },
+                        this.key
+                    )
+            })
+        } catch (error) {
+            console.log(error)
+        }
     }
 
     async deleteInstance(key) {
