@@ -54,18 +54,27 @@ exports.qrbase64 = async (req, res) => {
 }
 
 exports.info = async (req, res) => {
-    const instance = WhatsAppInstances[req.query.key]
-    let data
     try {
-        data = await instance.getInstanceDetail(req.query.key)
+        const instance = WhatsAppInstances[req.query.key]
+        let data
+        try {
+            data = await instance.getInstanceDetail(req.query.key)
+        } catch (error) {
+            data = {}
+        }
+        return res.json({
+            error: false,
+            message: 'Instance fetched successfully',
+            instance_data: {
+                instance_key: data.instance_key,
+                phone_connected: data.phone_connected,
+                webhookUrl: data.webhookUrl,
+                user: data.user.user,
+            },
+        })
     } catch (error) {
-        data = {}
+        console.log(error)
     }
-    return res.json({
-        error: false,
-        message: 'Instance fetched successfully',
-        instance_data: data,
-    })
 }
 
 exports.restore = async (req, res, next) => {
